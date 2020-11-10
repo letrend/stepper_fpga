@@ -59,7 +59,9 @@ module Stepper (
   assign readdata = step_counter;
 
   always @ ( posedge clk ) begin: AVALON_INTERFACE
-    reset_step_counter <= 0;
+    if(step_counter==0)begin // wait for it to apply
+      reset_step_counter <= 0;
+    end
     if(write)begin
       reset_step_counter <= 1;
       target_steps <= writedata;

@@ -27,7 +27,7 @@ module testbench_stepper;
     writedata = 10;
     #2
     write = 0;
-    #200
+    #20 // this will interupt the previous count
     write = 1;
     writedata = -10;
     #2
