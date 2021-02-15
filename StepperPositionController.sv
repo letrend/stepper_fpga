@@ -3,9 +3,9 @@ module StepperPositionController (
     input reset,
     input write,
     input [3:0] address,
-    input unsigned [31:0] writedata,
+    input signed [31:0] writedata,
     input read,
-    output unsigned [31:0] readdata,
+    output signed [31:0] readdata,
     output step,
     output reg dir,
     input A,
@@ -38,19 +38,33 @@ module StepperPositionController (
     end
   end
 
-  integer setpoint, Kp, Ki, deadband, intergralMax, error, position,
-      pterm, iterm, outputMax, result;
+  integer setpoint, Kp, Ki, deadband, integralMax, outputMax, error, position,
+      pterm, iterm, result;
 
-  // assign readdata = target_position;
+  assign readdata = (
+        (address==4'h0)?setpoint:
+        (address==4'h1)?Kp:
+        (address==4'h2)?Ki:
+        (address==4'h3)?deadband:
+        (address==4'h4)?integralMax:
+        (address==4'h5)?outputMax:
+        (address==4'h6)?error:
+        (address==4'h7)?position:
+        (address==4'h8)?pterm:
+        (address==4'h9)?iterm:
+        (address==4'hA)?result:
+        0
+        );
 
-  always @ ( posedge clk ) begin: AVALON_INTERFACE    
+  always @ ( posedge clk ) begin: AVALON_INTERFACE
     if(write)begin
       case (address)
         4'h0: setpoint <= writedata;
         4'h1: Kp <= writedata;
         4'h2: Ki <= writedata;
         4'h3: deadband <= writedata;
-        4'h4: intergralMax <= writedata;
+        4'h4: integralMax <= writedata;
+        4'h5: outputMax <= writedata;
       endcase
       end
   end
@@ -62,23 +76,25 @@ module StepperPositionController (
       error = (setpoint-position);
       pterm = (Kp * error);
   		iterm = iterm + (Ki * error); //add to the integral
-  		if (iterm > intergralMax) begin
-  			iterm = intergralMax;
-  		end else if (iterm < -intergralMax) begin
-  			iterm = -intergralMax;
+  		if (iterm > integralMax) begin
+  			iterm = integralMax;
+  		end else if (iterm < -integralMax) begin
+  			iterm = -integralMax;
   		end
       result = pterm + iterm;
-      if(result>outputMax)begin
-        result = outputMax;
-      end else if(result<-outputMax)begin
-        result = -outputMax;
-      end else begin
-        if(result>=0)begin
-          dir <= 0;
-          step_freq_hz <= result;
+      if(result>deadband || result<-deadband)begin
+        if(result>outputMax)begin
+          result = outputMax;
+        end else if(result<-outputMax)begin
+          result = -outputMax;
         end else begin
-          dir <= 1;
-          step_freq_hz <= -result;
+          if(result>=0)begin
+            dir <= 1;
+            step_freq_hz <= result;
+          end else begin
+            dir <= 0;
+            step_freq_hz <= -result;
+          end
         end
       end
     end
