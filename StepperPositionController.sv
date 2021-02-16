@@ -39,7 +39,7 @@ module StepperPositionController (
   end
 
   integer setpoint, Kp, Ki, deadband, integralMax, outputMax, error, position,
-      pterm, iterm, result;
+      pterm, iterm, result, pos, pos_offset;
 
   assign dir = result>=0;
 
@@ -67,6 +67,7 @@ module StepperPositionController (
         4'h3: deadband <= writedata;
         4'h4: integralMax <= writedata;
         4'h5: outputMax <= writedata;
+        4'hB: pos_offset <= pos;
       endcase
       end
   end
@@ -75,6 +76,7 @@ module StepperPositionController (
     if( reset )begin
       step_freq_hz = 0;
     end else begin
+      position <= pos-pos_offset;
       error = (setpoint-position);
       pterm = (Kp * error);
   		iterm = iterm + (Ki * error); //add to the integral
@@ -104,7 +106,7 @@ module StepperPositionController (
      .a(A),
      .b(B),
      .direction(encoder_movement_direction),
-     .position(position)
+     .position(pos)
    );
 
 
