@@ -7,7 +7,7 @@ module StepperPositionController (
     input read,
     output signed [31:0] readdata,
     output step,
-    output reg dir,
+    output dir,
     input A,
     input B,
     input I,
@@ -41,6 +41,8 @@ module StepperPositionController (
   integer setpoint, Kp, Ki, deadband, integralMax, outputMax, error, position,
       pterm, iterm, result;
 
+  assign dir = result>=0;
+
   assign readdata = (
         (address==4'h0)?setpoint:
         (address==4'h1)?Kp:
@@ -71,7 +73,7 @@ module StepperPositionController (
 
   always @ ( posedge reset, posedge clk ) begin: PI_CONTROLLER
     if( reset )begin
-      step_freq_hz <= 0;
+      step_freq_hz = 0;
     end else begin
       error = (setpoint-position);
       pterm = (Kp * error);
@@ -87,15 +89,10 @@ module StepperPositionController (
           result = outputMax;
         end else if(result<-outputMax)begin
           result = -outputMax;
-        end else begin
-          if(result>=0)begin
-            dir <= 1;
-            step_freq_hz <= result;
-          end else begin
-            dir <= 0;
-            step_freq_hz <= -result;
-          end
         end
+        step_freq_hz = result>=0?result:-result;
+      end else begin
+        step_freq_hz = 0;
       end
     end
   end
