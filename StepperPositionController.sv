@@ -11,7 +11,8 @@ module StepperPositionController (
     input A,
     input B,
     input I,
-    output reg enable
+    output reg enable,
+    input endswitch
   );
 
   parameter CLOCK_FREQ_HZ = 50_000_000;
@@ -55,6 +56,8 @@ module StepperPositionController (
         (address==4'h8)?pterm:
         (address==4'h9)?iterm:
         (address==4'hA)?result:
+        (address==4'hB)?pos_offset:
+        (address==4'hC)?endswitch:
         0
         );
 
@@ -92,7 +95,11 @@ module StepperPositionController (
         end else if(result<-outputMax)begin
           result = -outputMax;
         end
-        step_freq_hz = result>=0?result:-result;
+        if(endswitch)begin // endswitch is active low
+          step_freq_hz = result>=0?result:-result;
+        end else begin
+          step_freq_hz = result>=0?0:-result; // dont allow going further than endswitch
+        end
       end else begin
         step_freq_hz = 0;
       end
