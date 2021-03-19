@@ -58,6 +58,7 @@ module StepperPositionController (
         (address==4'hA)?result:
         (address==4'hB)?pos_offset:
         (address==4'hC)?endswitch:
+        (address==4'hD)?ticks_per_millisecond:
         0
         );
 
@@ -103,6 +104,17 @@ module StepperPositionController (
       end else begin
         step_freq_hz = 0;
       end
+    end
+  end
+
+  integer pos_prev, clk_counter_millisecond, ticks_per_millisecond;
+
+  always @ ( posedge clk ) begin: TICKS_PER_MILLISECOND
+    clk_counter_millisecond <= clk_counter_millisecond+1;
+    if(clk_counter_millisecond==(CLOCK_FREQ_HZ/1000-1))begin
+      clk_counter_millisecond <= 0;
+      ticks_per_millisecond <= (pos_prev-position);
+      pos_prev <= position;
     end
   end
 
