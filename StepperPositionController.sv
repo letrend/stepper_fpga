@@ -12,6 +12,7 @@ module StepperPositionController (
     input B,
     input I,
     output reg enable,
+    output reg [1:0] MS,
     input endswitch
   );
 
@@ -59,6 +60,8 @@ module StepperPositionController (
         (address==4'hB)?pos_offset:
         (address==4'hC)?endswitch:
         (address==4'hD)?ticks_per_millisecond:
+        (address==4'hE)?enable:
+        (address==4'hF)?MS:
         0
         );
 
@@ -72,6 +75,8 @@ module StepperPositionController (
         4'h4: integralMax <= writedata;
         4'h5: outputMax <= writedata;
         4'hB: pos_offset <= pos;
+        4'hE: enable <= !writedata[0]; // enable is active-low
+        4'hF: MS <= writedata[1:0]; // mode select
       endcase
       end
   end
