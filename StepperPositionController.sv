@@ -2,7 +2,7 @@ module StepperPositionController (
     input clk,
     input reset,
     input write,
-    input [3:0] address,
+    input [4:0] address,
     input signed [31:0] writedata,
     input read,
     output signed [31:0] readdata,
@@ -41,50 +41,49 @@ module StepperPositionController (
   end
 
   integer setpoint, Kp, Ki, deadband, integralMax, outputMax, error, position,
-      pterm, iterm, result, pos, pos_offset;
+      pterm, iterm, term_sum, result, pos, pos_offset;
 
   assign dir = result>=0;
 
   assign readdata = (
-        (address==4'h0)?setpoint:
-        (address==4'h1)?Kp:
-        (address==4'h2)?Ki:
-        (address==4'h3)?deadband:
-        (address==4'h4)?integralMax:
-        (address==4'h5)?outputMax:
-        (address==4'h6)?error:
-        (address==4'h7)?position:
-        (address==4'h8)?pterm:
-        (address==4'h9)?iterm:
-        (address==4'hA)?result:
-        (address==4'hB)?pos_offset:
-        (address==4'hC)?endswitch:
-        (address==4'hD)?ticks_per_millisecond:
-        (address==4'hE)?enable:
-        (address==4'hF)?MS:
+        (address==5'h0)?setpoint:
+        (address==5'h1)?Kp:
+        (address==5'h2)?Ki:
+        (address==5'h3)?deadband:
+        (address==5'h4)?integralMax:
+        (address==5'h5)?outputMax:
+        (address==5'h6)?error:
+        (address==5'h7)?position:
+        (address==5'h8)?pterm:
+        (address==5'h9)?iterm:
+        (address==5'hA)?term_sum:
+        (address==5'hB)?result:
+        (address==5'hC)?pos_offset:
+        (address==5'hF)?endswitch:
+        (address==5'hE)?ticks_per_millisecond:
+        (address==5'hF)?enable:
+        (address==5'h10)?MS:
+        (address==5'h11)?result_freq:
         0
         );
 
   always @ ( posedge clk ) begin: AVALON_INTERFACE
     if(write)begin
       case (address)
-        4'h0: setpoint <= writedata;
-        4'h1: Kp <= writedata;
-        4'h2: Ki <= writedata;
-        4'h3: deadband <= writedata;
-        4'h4: integralMax <= writedata;
-        4'h5: outputMax <= writedata;
-        4'hB: pos_offset <= pos;
-        4'hE: enable <= !writedata[0]; // enable is active-low
-        4'hF: MS <= writedata[1:0]; // mode select
+        5'h0: setpoint <= writedata;
+        5'h1: Kp <= writedata;
+        5'h2: Ki <= writedata;
+        5'h3: deadband <= writedata;
+        5'h4: integralMax <= writedata;
+        5'h5: outputMax <= writedata;
+        5'hC: pos_offset <= pos;
+        5'hF: enable <= !writedata[0]; // enable is active-low
+        5'h10: MS <= writedata[1:0]; // mode select
       endcase
       end
   end
 
-  always @ ( posedge reset, posedge clk ) begin: PI_CONTROLLER
-    if( reset )begin
-      step_freq_hz = 0;
-    end else begin
+  always @ ( posedge clk ) begin: PI_CONTROLLER
       position <= pos-pos_offset;
       error = (setpoint-position);
       pterm = (Kp * error);
@@ -94,22 +93,40 @@ module StepperPositionController (
   		end else if (iterm < -integralMax) begin
   			iterm = -integralMax;
   		end
-      result = pterm + iterm;
-      if(result>deadband || result<-deadband)begin
-        if(result>outputMax)begin
-          result = outputMax;
-        end else if(result<-outputMax)begin
-          result = -outputMax;
-        end
-        if(endswitch)begin // endswitch is active low
-          step_freq_hz = result>=0?result:-result;
-        end else begin
-          step_freq_hz = result>=0?0:-result; // dont allow going further than endswitch
-        end
+      term_sum = pterm + iterm;
+      if(term_sum>deadband || term_sum<-deadband)begin
+          result = term_sum;
       end else begin
-        step_freq_hz = 0;
+        result = 0;
+      end
+  end
+
+  integer result_freq;
+
+  always @ ( posedge reset, posedge clk ) begin: RAMP_UP_CONTROL
+  if( reset )begin
+    step_freq_hz <= 0;
+  end else begin
+    if(result>outputMax && ticks_per_millisecond>50)begin
+      result_freq <= outputMax<<<1;
+    end else if(result<-outputMax && ticks_per_millisecond<-50)begin
+      result_freq <= -(outputMax<<<1);
+    end else begin
+      if(result>outputMax)begin
+        result_freq <= outputMax;
+      end else if(result<-outputMax)begin
+        result_freq <= -outputMax;
+      end else begin
+        result_freq <= result;
       end
     end
+
+    if(endswitch)begin // endswitch is active low
+      step_freq_hz <= result_freq>=0?result_freq:-result_freq;
+    end else begin
+      step_freq_hz <= result_freq>=0?0:-result_freq; // dont allow going further than endswitch
+    end
+  end
   end
 
   integer pos_prev, clk_counter_millisecond, ticks_per_millisecond;
@@ -118,7 +135,7 @@ module StepperPositionController (
     clk_counter_millisecond <= clk_counter_millisecond+1;
     if(clk_counter_millisecond==(CLOCK_FREQ_HZ/1000-1))begin
       clk_counter_millisecond <= 0;
-      ticks_per_millisecond <= (pos_prev-position);
+      ticks_per_millisecond <= (position-pos_prev);
       pos_prev <= position;
     end
   end
