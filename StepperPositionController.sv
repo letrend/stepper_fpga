@@ -41,7 +41,7 @@ module StepperPositionController (
   end
 
   integer setpoint, Kp, Ki, deadband, integralMax, outputMax, error, position,
-      pterm, iterm, term_sum, result, pos, pos_offset;
+      pterm, iterm, term_sum, result, pos, pos_offset, ramp_up_limit, ramp_up_threshold;
 
   assign dir = result>=0;
 
@@ -64,10 +64,17 @@ module StepperPositionController (
         (address==5'hF)?enable:
         (address==5'h10)?MS:
         (address==5'h11)?result_freq:
+        (address==5'h12)?ramp_up_limit:
+        (address==5'h13)?ramp_up_threshold:
         0
         );
 
-  always @ ( posedge clk ) begin: AVALON_INTERFACE
+  always @ ( posedge clk, posedge reset ) begin: AVALON_INTERFACE
+  if(reset)begin
+    outputMax<=12000;
+    ramp_up_limit<=6000;
+    ramp_up_threshold<=30;
+  end else begin
     if(write)begin
       case (address)
         5'h0: setpoint <= writedata;
@@ -79,8 +86,11 @@ module StepperPositionController (
         5'hC: pos_offset <= pos;
         5'hF: enable <= !writedata[0]; // enable is active-low
         5'h10: MS <= writedata[1:0]; // mode select
+        5'h12: ramp_up_limit <= writedata;
+        5'h13: ramp_up_threshold <= writedata;
       endcase
       end
+    end
   end
 
   always @ ( posedge clk ) begin: PI_CONTROLLER
@@ -107,15 +117,15 @@ module StepperPositionController (
   if( reset )begin
     step_freq_hz <= 0;
   end else begin
-    if(result>outputMax && ticks_per_millisecond>50)begin
-      result_freq <= outputMax<<<1;
-    end else if(result<-outputMax && ticks_per_millisecond<-50)begin
-      result_freq <= -(outputMax<<<1);
+    if(result>ramp_up_limit && ticks_per_millisecond>ramp_up_threshold)begin
+      result_freq <= outputMax;
+    end else if(result<-ramp_up_limit && ticks_per_millisecond<-ramp_up_threshold)begin
+      result_freq <= -outputMax;
     end else begin
-      if(result>outputMax)begin
-        result_freq <= outputMax;
-      end else if(result<-outputMax)begin
-        result_freq <= -outputMax;
+      if(result>ramp_up_limit)begin
+        result_freq <= ramp_up_limit;
+      end else if(result<-ramp_up_limit)begin
+        result_freq <= -ramp_up_limit;
       end else begin
         result_freq <= result;
       end
