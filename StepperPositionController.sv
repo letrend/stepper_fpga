@@ -59,7 +59,7 @@ module StepperPositionController (
         (address==5'hA)?term_sum:
         (address==5'hB)?result:
         (address==5'hC)?pos_offset:
-        (address==5'hF)?endswitch:
+        (address==5'hD)?endswitch: // endswitch is active-low
         (address==5'hE)?ticks_per_millisecond:
         (address==5'hF)?enable:
         (address==5'h10)?MS:
